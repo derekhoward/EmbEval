@@ -18,6 +18,15 @@ go2geneIDs = objanno.get_goid2dbids(objanno.associations)
 
 
 def distance_df(emb_df, metric='euclidean'):
+    """Creates a distance matrix for a given embedding DataFrame.
+
+    Args:
+        emb_df (DataFrame): A DataFrame of shape (n_probes, n_features)
+        metric (str, optional): Distance metric, defaults to 'euclidean'. Can also compute cosine similarity.
+
+    Returns:
+        dist (DataFrame): A square DataFrame of shape (n_probes, n_probes)
+    """
     if metric == 'euclidean':
         dist = euclidean_distances(emb_df)
     elif metric == 'cosine':
@@ -31,6 +40,15 @@ def distance_df(emb_df, metric='euclidean'):
 
 
 def get_proportion_first_match(emb_df, metric='euclidean'):
+    """Operates on probe embedding and checks to see if nearest probe judged by distance metric is of another probe for the same gene.
+
+    Args:
+        emb_df (pd.DataFrame): A DataFrame of shape (n_samples, n_features)
+        metric (str, optional): Distance metric, defaults to 'euclidean'. Can also compute cosine similarity.
+
+    Returns:
+        float: proportion of probes that match to another probe of the same gene
+    """
     dist = distance_df(emb_df, metric=metric)
     
     if metric == 'euclidean':
@@ -60,18 +78,20 @@ def get_closest_probes(emb_df, probe_id, metric='euclidean'):
 
 
 def create_diagonal_mask(low_to_high_map, target_value = 1):
-    
     """Create a block diagonal mask matrix from the input mapping.
 
-    The input pandas data frame has only two columns, the first is the 
+    Args:
+        low_to_high_map (pd.DataFrame): df has only two columns, the first is the 
     low level id (image, sample, or probe_id) and the second is the 
-    high level mapping (gene, region, donor). The target_value argument can
+    high level mapping (gene, region, donor).
+
+        target_value (int, optional): Defaults to 1. Can
     be set to np.nan. 
-    
-    The output will be a matrix sized the number of low level ID's squared. 
+
+    Returns:
+        relationship_df (pd.DataFrame): a matrix sized the number of low level ID's squared. 
     The column and row order will have to be rearranged to match your distance matrix.
-    
-       """
+    """
     low_to_high_map.drop_duplicates()
     grouped = low_to_high_map.groupby(low_to_high_map.columns[1])
     ordered_low_level_names = list()
@@ -92,6 +112,17 @@ def create_diagonal_mask(low_to_high_map, target_value = 1):
 
 
 def calc_probe_match_auc(emb_df, mask, probe_map='default', metric='euclidean'):
+    """Calculates AUC where matches are for different probes of same gene symbol.
+
+    Args:
+        emb_df (pd.DataFrame): A DataFrame of shape (n_samples, n_features)
+        probe_map (str, optional): Mapping of probes to gene symbols. Default is from Allen fetal brain.
+        metric (str, optional): Defaults to 'euclidean'.
+        
+    Returns:
+        auc (float)
+    """
+    
     if probe_map == 'default':
         probe_ids = pd.read_csv('./data/raw/allen_human_fetal_brain/lmd_matrix_12566/rows_metadata.csv', usecols=['probeset_name', 'gene_symbol'])
         probe_ids = probe_ids.set_index('probeset_name').to_dict()['gene_symbol']
@@ -106,17 +137,14 @@ def calc_probe_match_auc(emb_df, mask, probe_map='default', metric='euclidean'):
     else:
         raise ValueError("Error: specify probe_map as either 'default' or 'reannotator'.")
         
-    #dist = euclidean_distances(emb)
-    #dist = pd.DataFrame(dist)
-    #dist.index = emb.index
-    #dist.columns = emb.index
+
     dist = distance_df(emb_df)
     dist.index.name = 'probe_id'
     np.fill_diagonal(dist.values, float('inf'))
-    dist.drop('#na#', inplace=True)
-    dist.drop('#na#', axis=1, inplace=True)
+    #dist.drop('#na#', inplace=True)
+    #dist.drop('#na#', axis=1, inplace=True)
     dist = dist.sort_index(axis=0).sort_index(axis=1)
-    mask = mask.sort_index(axis=0).sort_index(axis=1)
+    #mask = mask.sort_index(axis=0).sort_index(axis=1)
     
     values = dist.values
     i, j = np.tril_indices_from(values, k=-1)
@@ -131,16 +159,26 @@ def calc_probe_match_auc(emb_df, mask, probe_map='default', metric='euclidean'):
     y_score = pairwise_dists.distance 
     y_true = pairwise_dists.same_gene
 
-    auc = metrics.roc_auc_score(y_true, y_score)
+    if metric == 'euclidean':
+        auc = 1 - metrics.roc_auc_score(y_true, y_score)
+    else:
+        auc = metrics.roc_auc_score(y_true, y_score)
     
     return auc
 
 
 def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300, threshold_present=0.01, verbose=False):
-    """
-    Transforms a list of genes of interest into a dataframe where columns represent GO-groups and rows are TRUE/FALSE presence of gene in the GO group.
+    """Creates a dataframe of GO-group presence for a list of genes.
     
-    genes_of_interest must be iterable of entrez_gene_ids
+    Args:
+        genes_of_interest : must be iterable of entrez_gene_ids
+        min_GO_size (int, optional): Min num of genes in GO group to be included. Defaults to 200.
+        max_GO_size (int, optional): Max num of genes in GO group to be included. Defaults to 300.
+        threshold_present (float, optional): Percent of genes in GO group that should be present in gene_list. Defaults to 0.01.
+        verbose (bool, optional): [description]. Defaults to False.
+
+    Returns:
+        pd.DataFrame : df where index is entrezgene, columns are GO group with TRUE/FALSE presence values.
     """
     genes = pd.Series(genes_of_interest)
     go_group_presence = {}
@@ -165,12 +203,17 @@ def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300, 
 
 
 def merge_embedding_with_GO_labels(emb_df, GO_df):
-    # emb_df has index of gene_symbol
-    # GO_df has index of entrezgene
+    """Merges an gene_embedding with GO group presence df.
     
-    # output should be embedding_df with gene_symbol as index,
-    # embedding cols should be prefixed with emb_, while potential GO presence columns are prefixed with GO
-    
+    Embedding cols are prefixed with emb_, while potential GO presence columns are prefixed with GO:
+
+    Args:
+        emb_df (pd.DataFrame): emb_df.index is gene_symbol
+        GO_df (pd.DataFrame): GO_df.index is entrezgene
+
+    Returns:
+        (pd.DataFrame): Multi-index gene embedding with columns for GO presence concatenated.
+    """
     # get df with gene_symbols and entrez_ids from fetal data (more updated than adult probes data)
     all_genes = pd.read_csv('./data/raw/allen_human_fetal_brain/lmd_matrix_12566/rows_metadata.csv')
     all_genes = all_genes[~((all_genes.gene_symbol.str.startswith('A_')) | (all_genes.gene_symbol.str.startswith('CUST_')))].gene_symbol.drop_duplicates()
