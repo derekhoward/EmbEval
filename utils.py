@@ -18,6 +18,14 @@ def genesymbols_2_entrezids(genelist):
 
 
 def convert_probe_emb_to_gene_emb(probe_emb):
+    """Convert embedding with probe_ids for index to gene symbols by averaging probes for same gene symbol.
+
+    Args:
+        probe_emb (DataFrame): embedding with index of probe_ids
+
+    Returns:
+        gene_emb (DataFrame): embedding with index of gene_symbols
+    """
     all_genes = pd.read_csv('./data/raw/allen_human_fetal_brain/lmd_matrix_12566/rows_metadata.csv')
     
     probe2gene = all_genes[all_genes.probeset_name.isin(probe_emb.index)].loc[:, ['probeset_name', 'gene_symbol']]
