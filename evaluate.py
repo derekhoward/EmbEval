@@ -134,7 +134,7 @@ def calc_probe_match_auc(emb_df, mask, probe_map='default', metric='euclidean'):
     return auc
 
 
-def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300, verbose=False):
+def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300):
     """Creates a dataframe of GO-group presence for a list of genes.
 
     Args:
@@ -150,17 +150,12 @@ def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300, 
 
     for GO in go2geneIDs:
         gene_ids = go2geneIDs[GO]
-        if (len(gene_ids) > min_GO_size) & (len(gene_ids) < max_GO_size):
-            # boolean vector (length is num of genes in embedding)
-            in_go_group_vector = genes.isin(gene_ids)
+        
+        # boolean vector (length is num of genes in embedding)
+        in_go_group_vector = genes.isin(gene_ids)
+        
+        if (in_go_group_vector.sum() > min_GO_size) & (in_go_group_vector.sum() < max_GO_size):
             go_group_presence[GO] = in_go_group_vector
-
-            percent_present = in_go_group_vector.sum() / len(in_go_group_vector)
-            if verbose:
-                print(f'{GO} contains {len(gene_ids)} genes')
-                print(
-                    f'{percent_present*100 :.4f}% of total number of genes in embedding are present in {GO}')
-                print('--'*50)
 
     result = pd.DataFrame(go_group_presence)
     result.index = genes
