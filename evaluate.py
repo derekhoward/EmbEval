@@ -16,7 +16,7 @@ import os
 
 gene2go = download_ncbi_associations()
 objanno = Gene2GoReader(gene2go, taxids=[9606], go2geneids=True)
-go2geneIDs = objanno.get_goid2dbids(objanno.associations)
+go2geneIDs = objanno.get_goid2dbids(objanno.associations) # this is a dict. Keys are GO IDs, values are gene_IDs of the genes that are associated to that GO term
 geneID2GO = objanno.get_dbid2goids(objanno.associations)
 genes_in_GO = list(geneID2GO.keys())  # these are entrez_ids
 
@@ -162,7 +162,6 @@ def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300):
         if (in_go_group_vector.sum() > min_GO_size) & (in_go_group_vector.sum() < max_GO_size):
             go_group_presence[GO] = in_go_group_vector
 
-
     print ("GO group presence dict is: ", go_group_presence)
     result = pd.DataFrame(go_group_presence)
     result.index = genes
@@ -253,8 +252,8 @@ def perform_GOclass_eval(embedding_df,
     X = merged_df.loc[:, merged_df.columns.str.startswith('emb_')]
     y = merged_df.loc[:, merged_df.columns.str.startswith('GO:')]
 
-    print(f'There are {y.shape[1]} GO groups that will be evaluated.')
 
+    print(f'There are {y.shape[1]} GO groups that will be evaluated.')
     GO_SCORES = []
     skf = StratifiedKFold(n_splits=n_splits)
 
