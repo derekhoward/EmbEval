@@ -161,6 +161,7 @@ def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300):
         if (in_go_group_vector.sum() > min_GO_size) & (in_go_group_vector.sum() < max_GO_size):
             go_group_presence[GO] = in_go_group_vector
 
+
     print ("GO group presence dict is: ", go_group_presence)
     result = pd.DataFrame(go_group_presence)
     result.index = genes
@@ -253,6 +254,7 @@ def perform_GOclass_eval(embedding_df,
 
 
     print(f'There are {y.shape[1]} GO groups that will be evaluated.')
+
     GO_SCORES = []
     skf = StratifiedKFold(n_splits=n_splits)
 
