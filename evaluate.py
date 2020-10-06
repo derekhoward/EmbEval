@@ -11,10 +11,12 @@ from goatools.base import download_ncbi_associations
 from goatools.anno.genetogo_reader import Gene2GoReader
 import utils
 
+import os
+
 
 gene2go = download_ncbi_associations()
 objanno = Gene2GoReader(gene2go, taxids=[9606], go2geneids=True)
-go2geneIDs = objanno.get_goid2dbids(objanno.associations)
+go2geneIDs = objanno.get_goid2dbids(objanno.associations) # this is a dict. Keys are GO IDs, values are gene_IDs of the genes that are associated to that GO term
 geneID2GO = objanno.get_dbid2goids(objanno.associations)
 genes_in_GO = list(geneID2GO.keys())  # these are entrez_ids
 
@@ -30,7 +32,9 @@ def distance_df(emb_df, metric='euclidean'):
         dist (DataFrame): A square DataFrame of shape (n_probes, n_probes)
     """
     if metric == 'euclidean':
-        dist = euclidean_distances(emb_df)
+        #dist = euclidean_distances(emb_df)
+        #dist = euclidean_distances(emb_df, emb_df)
+        dist = euclidean_distances(emb_df.iloc[:, 1:], emb_df.iloc[:, 1:])
     elif metric == 'cosine':
         dist = cosine_similarity(emb_df)
 
@@ -157,9 +161,13 @@ def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300):
         if (in_go_group_vector.sum() > min_GO_size) & (in_go_group_vector.sum() < max_GO_size):
             go_group_presence[GO] = in_go_group_vector
 
+    print ("GO group presence dict is: ", go_group_presence)
     result = pd.DataFrame(go_group_presence)
     result.index = genes
     result.index.name = 'entrezgene'
+
+
+    print ("final result is: ", result)
     return result
 
 
@@ -243,8 +251,8 @@ def perform_GOclass_eval(embedding_df,
     X = merged_df.loc[:, merged_df.columns.str.startswith('emb_')]
     y = merged_df.loc[:, merged_df.columns.str.startswith('GO:')]
 
-    print(f'There are {y.shape[1]} GO groups that will be evaluated.')
 
+    print(f'There are {y.shape[1]} GO groups that will be evaluated.')
     GO_SCORES = []
     skf = StratifiedKFold(n_splits=n_splits)
 
@@ -276,7 +284,24 @@ def perform_GOclass_eval(embedding_df,
                         'iteration': i,
                         'f1': f1,
                         'AUC': auc}
-            print(f"Fold:{i} F1:{f1} AUC:{auc}")
+            #print(f"Fold:{i} F1:{f1} AUC:{auc}")
+            print ("Fold")
             GO_SCORES.append(measures)
 
     return pd.DataFrame(GO_SCORES)
+
+
+
+if __name__ == "__main__":
+
+    embed_file_name =  "validation_embeddings_image_level.csv"
+    path_to_embed = os.path.join("/Users/pegah_abed/Documents/Embedding_Evaluation/embed_eval", embed_file_name)
+    emb_df = pd.read_csv(path_to_embed)
+    print ("number of images: ", len(emb_df))
+
+    #dist_matrix = distance_df(emb_df)
+    #print ("number of rows: ", len(dist_matrix))
+    #dist_matrix.to_csv(os.path.join("/Users/pegah_abed/Documents/Embedding_Evaluation/embed_eval", "distance_matrix_3.csv"))
+
+    get_proportion_first_match(emb_df)
+
