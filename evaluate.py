@@ -169,13 +169,22 @@ def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300):
         if (in_go_group_vector.sum() > min_GO_size) & (in_go_group_vector.sum() < max_GO_size):
             go_group_presence[GO] = in_go_group_vector
 
+
     #print ("GO group presence dict is: ", go_group_presence)
+
+
+    print ("GO group presence dict is: ", go_group_presence)
+
     result = pd.DataFrame(go_group_presence)
     result.index = genes
     result.index.name = 'entrezgene'
 
 
+
     #print ("final result is: ", result)
+
+    print ("final result is: ", result)
+
     return result
 
 
@@ -278,77 +287,81 @@ def perform_GOclass_eval(embedding_df,
     y = merged_df.loc[:, merged_df.columns.str.startswith('GO:')]
 
 
+
+    #print(f'There are {y.shape[1]} GO groups that will be evaluated.')
+
     #print(f'There are {y.shape[1]} GO groups that will be evaluated.')
     GO_SCORES = []
     skf = StratifiedKFold(n_splits=n_splits)
 
 
-    count = 1
-
     for GOlabel in y:
 
-        if count ==1:
-
-            y_test_total = pd.Series([])
-            preds_total = []
-            probas_total = pd.DataFrame()
 
 
-            print('--'*50)
-            print(GOlabel)
-            y_GO = y.loc[:, GOlabel]
-
-            GO_term = goID2goTerm[GOlabel]
-            GO_group_size = len(go2geneIDs[GOlabel])
-
-            for i, (train_idx, test_idx) in enumerate(skf.split(X, y_GO)):
-                model = LogisticRegression(penalty='none', n_jobs=n_jobs)
-                X_train = X.iloc[train_idx, :]
-                y_train = y_GO.iloc[train_idx]
-                X_test = X.iloc[test_idx, :]
-                y_test = y_GO.iloc[test_idx]
-
-                model.fit(X_train, y_train)
-
-                # Extract predictions from fitted model
-                preds = list(model.predict(X_test))
-                # probs for classes ordered in same manner as model.classes_
-                # model.classes_  >>  array([False,  True])
-                probas = pd.DataFrame(model.predict_proba(
-                    X_test), columns=model.classes_)
-
-                # Get metrics for each model
-                #f1 = f1_score(y_test, preds)
-                #auc = roc_auc_score(y_test, probas[True])
+        y_test_total = pd.Series([])
+        preds_total = []
+        probas_total = pd.DataFrame()
 
 
-                y_test_total = y_test_total.append(y_test)
-                preds_total += preds
-                probas_total = probas_total.append(probas)
+        print('--'*50)
+        print(GOlabel)
+        y_GO = y.loc[:, GOlabel]
 
-    
-                print("Fold")
+        GO_term = goID2goTerm[GOlabel]
+        GO_group_size = len(go2geneIDs[GOlabel])
 
-            preds_total = np.array(preds_total)
+        for i, (train_idx, test_idx) in enumerate(skf.split(X, y_GO)):
+            model = LogisticRegression(penalty='none', n_jobs=n_jobs)
+            X_train = X.iloc[train_idx, :]
+            y_train = y_GO.iloc[train_idx]
+            X_test = X.iloc[test_idx, :]
+            y_test = y_GO.iloc[test_idx]
+
+            model.fit(X_train, y_train)
+
+            # Extract predictions from fitted model
+            preds = list(model.predict(X_test))
+            # probs for classes ordered in same manner as model.classes_
+            # model.classes_  >>  array([False,  True])
+            probas = pd.DataFrame(model.predict_proba(
+                X_test), columns=model.classes_)
+
+            # Get metrics for each model
+            #f1 = f1_score(y_test, preds)
+            #auc = roc_auc_score(y_test, probas[True])
 
 
-            f1 = f1_score(y_test_total, preds_total)
-            auc = roc_auc_score(y_test_total, probas_total[True])
-
-            measures = {'GO_group': GOlabel,
-                        'GO_group_title': GO_term,
-                        'GO_group_size': GO_group_size,
-                        'number of used genes':gene_count_per_GO_group[GOlabel],
-                        'f1': f1,
-                        'AUC': auc}
+            y_test_total = y_test_total.append(y_test)
+            preds_total += preds
+            probas_total = probas_total.append(probas)
 
 
+            print("Fold")
 
-            GO_SCORES.append(measures)
+        preds_total = np.array(preds_total)
 
-            count +=1
+
+        f1 = f1_score(y_test_total, preds_total)
+        auc = roc_auc_score(y_test_total, probas_total[True])
+
+        measures = {'GO_group': GOlabel,
+                    'GO_group_title': GO_term,
+                    'GO_group_size': GO_group_size,
+                    'number of used genes':gene_count_per_GO_group[GOlabel],
+                    'f1': f1,
+                    'AUC': auc}
+
+
+
+
+        #print(f"Fold:{i} F1:{f1} AUC:{auc}")
+        print ("Fold")
+        GO_SCORES.append(measures)
+
 
     return pd.DataFrame(GO_SCORES)
+
 
 
 if __name__ == "__main__":
@@ -369,11 +382,21 @@ if __name__ == "__main__":
     val_emb_df = pd.read_csv(path_to_val_embed)
     train_emb_df = pd.read_csv(path_to_train_embed)
 
+=======
+
+if __name__ == "__main__":
+
+    embed_file_name =  "validation_embeddings_image_level.csv"
+    path_to_embed = os.path.join("/Users/pegah_abed/Documents/Embedding_Evaluation/embed_eval", embed_file_name)
+    emb_df = pd.read_csv(path_to_embed)
+    print ("number of images: ", len(emb_df))
+>>>>>>> a3aa051db315b08a092b371a996ee29fd94d1628
 
     #dist_matrix = distance_df(emb_df)
     #print ("number of rows: ", len(dist_matrix))
     #dist_matrix.to_csv(os.path.join("/Users/pegah_abed/Documents/Embedding_Evaluation/embed_eval", "distance_matrix_3.csv"))
 
+<<<<<<< HEAD
     #get_proportion_first_match(emb_df)
 
     val_after_filter_df =filter_embedding_for_genes_in_GO(val_emb_df)
@@ -451,13 +474,5 @@ if __name__ == "__main__":
         
 
         
-
-
-
-
-
-
-
-
 
 
