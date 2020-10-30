@@ -15,10 +15,17 @@ import os
 
 
 gene2go = download_ncbi_associations()
+
 objanno = Gene2GoReader(gene2go, taxids=[9606], go2geneids=True)
+
 go2geneIDs = objanno.get_goid2dbids(objanno.associations) # this is a dict. Keys are GO IDs, values are gene_IDs of the genes that are associated to that GO term
+
 geneID2GO = objanno.get_dbid2goids(objanno.associations)
+
+goID2goTerm = {item.GO_ID :item.GO_term for item in objanno.associations}
+
 genes_in_GO = list(geneID2GO.keys())  # these are entrez_ids
+
 
 
 
@@ -162,13 +169,13 @@ def get_GO_presence_labels(genes_of_interest, min_GO_size=200, max_GO_size=300):
         if (in_go_group_vector.sum() > min_GO_size) & (in_go_group_vector.sum() < max_GO_size):
             go_group_presence[GO] = in_go_group_vector
 
-    print ("GO group presence dict is: ", go_group_presence)
+    #print ("GO group presence dict is: ", go_group_presence)
     result = pd.DataFrame(go_group_presence)
     result.index = genes
     result.index.name = 'entrezgene'
 
 
-    print ("final result is: ", result)
+    #print ("final result is: ", result)
     return result
 
 
@@ -182,18 +189,22 @@ def filter_embedding_for_genes_in_GO(embedding, index_type='gene_symbol'):
     Returns:
         embedding (pd.DataFrame): A DataFrame of shape (n_genes, n_dims)
     """
-    gene_entrez_map = pd.read_csv(
-        './data/raw/allen_human_fetal_brain/lmd_matrix_12566/rows_metadata.csv', usecols=['entrez_id', 'gene_symbol'])
-    gene_entrez_map = gene_entrez_map.dropna(
-        subset=['entrez_id']).drop_duplicates(subset=['entrez_id'])
+    #gene_entrez_map = pd.read_csv( './data/raw/allen_human_fetal_brain/lmd_matrix_12566/rows_metadata.csv', usecols=['entrez_id', 'gene_symbol'])
+    #gene_entrez_map = gene_entrez_map.dropna(subset=['entrez_id']).drop_duplicates(subset=['entrez_id'])
+
+    gene_entrez_map = embedding.dropna(subset=['entrez_id']).drop_duplicates(subset=['entrez_id'])
 
     gene_entrez_map = gene_entrez_map[gene_entrez_map.entrez_id.isin(
         genes_in_GO)]
 
+    """
     if index_type == 'gene_symbol':
         return embedding[embedding.index.isin(gene_entrez_map.gene_symbol)]
     else:
         return embedding[embedding.index.isin(gene_entrez_map.entrez_id)]
+    """
+
+    return gene_entrez_map
 
 
 def merge_embedding_with_GO_labels(emb_df, GO_df):
@@ -209,17 +220,15 @@ def merge_embedding_with_GO_labels(emb_df, GO_df):
         (pd.DataFrame): Multi-index gene embedding with columns for GO presence concatenated.
     """
     # get df with gene_symbols and entrez_ids from fetal data (more updated than adult probes data)
-    all_genes = pd.read_csv(
-        './data/raw/allen_human_fetal_brain/lmd_matrix_12566/rows_metadata.csv')
-    all_genes = all_genes[~((all_genes.gene_symbol.str.startswith('A_')) | (
-        all_genes.gene_symbol.str.startswith('CUST_')))].gene_symbol.drop_duplicates()
-    all_genes_w_entrez = utils.genesymbols_2_entrezids(all_genes)
+    #all_genes = pd.read_csv('./data/raw/allen_human_fetal_brain/lmd_matrix_12566/rows_metadata.csv')
+    #all_genes = all_genes[~((all_genes.gene_symbol.str.startswith('A_')) | (
+        #all_genes.gene_symbol.str.startswith('CUST_')))].gene_symbol.drop_duplicates()
+
+    #all_genes_w_entrez = utils.genesymbols_2_entrezids(all_genes)
 
     emb_df = emb_df.add_prefix('emb_')
-    df = emb_df.merge(all_genes_w_entrez, left_index=True,
-                      right_on='gene_symbol')
-    df = df.merge(GO_df, left_on='entrez_id', right_index=True)
-
+    emb_df = emb_df.rename(columns={"emb_gene_symbol": "gene_symbol", "emb_entrez_id": "entrez_id"})
+    df = emb_df.merge(GO_df, left_on='entrez_id', right_index=True)
     return df.set_index(['entrez_id', 'gene_symbol'])
 
 
@@ -233,9 +242,22 @@ def perform_GOclass_eval(embedding_df,
     if index_type == 'gene_symbol':
         embedding_df = filter_embedding_for_genes_in_GO(
             embedding_df, index_type='gene_symbol')
-        entrez_genelist = utils.genesymbols_2_entrezids(embedding_df.index)
-        GO_df = get_GO_presence_labels(
-            genes_of_interest=entrez_genelist.entrez_id, min_GO_size=min_GO_size, max_GO_size=max_GO_size)
+
+        print ("index type is gene symbol")
+        print ("embedding df: ")
+        print (embedding_df.head())
+
+
+        #entrez_genelist = utils.genesymbols_2_entrezids(embedding_df.index)
+        #GO_df = get_GO_presence_labels(genes_of_interest=entrez_genelist.entrez_id, min_GO_size=min_GO_size, max_GO_size=max_GO_size)
+
+        emb_entrez_id = embedding_df['entrez_id']
+
+        GO_df= get_GO_presence_labels(emb_entrez_id, min_GO_size=min_GO_size, max_GO_size=max_GO_size)
+
+        gene_count_per_GO_group ={col: GO_df[col].sum() for col in GO_df.columns}
+
+
 
     elif index_type == 'entrez_id':
         embedding_df = filter_embedding_for_genes_in_GO(
@@ -249,60 +271,193 @@ def perform_GOclass_eval(embedding_df,
     # merge the embedding and GO_df to ensure they have same index
     # returns a multi-index df with gene_symbol and entrez_id
     merged_df = merge_embedding_with_GO_labels(emb_df=embedding_df, GO_df=GO_df)
+    print ("merged df: ")
+    print (merged_df.head())
+
     X = merged_df.loc[:, merged_df.columns.str.startswith('emb_')]
     y = merged_df.loc[:, merged_df.columns.str.startswith('GO:')]
 
 
-    print(f'There are {y.shape[1]} GO groups that will be evaluated.')
+    #print(f'There are {y.shape[1]} GO groups that will be evaluated.')
     GO_SCORES = []
     skf = StratifiedKFold(n_splits=n_splits)
 
+
+    count = 1
+
     for GOlabel in y:
-        print('--'*50)
-        print(GOlabel)
-        y_GO = y.loc[:, GOlabel]
 
-        for i, (train_idx, test_idx) in enumerate(skf.split(X, y_GO)):
-            model = LogisticRegression(penalty='none', n_jobs=n_jobs)
-            X_train = X.iloc[train_idx, :]
-            y_train = y_GO.iloc[train_idx]
-            X_test = X.iloc[test_idx, :]
-            y_test = y_GO.iloc[test_idx]
+        if count ==1:
 
-            model.fit(X_train, y_train)
+            y_test_total = pd.Series([])
+            preds_total = []
+            probas_total = pd.DataFrame()
 
-            # Extract predictions from fitted model
-            preds = model.predict(X_test)
-            # probs for classes ordered in same manner as model.classes_
-            # model.classes_  >>  array([False,  True])
-            probas = pd.DataFrame(model.predict_proba(
-                X_test), columns=model.classes_)
 
-            # Get metrics for each model
-            f1 = f1_score(y_test, preds)
-            auc = roc_auc_score(y_test, probas[True])
+            print('--'*50)
+            print(GOlabel)
+            y_GO = y.loc[:, GOlabel]
+
+            GO_term = goID2goTerm[GOlabel]
+            GO_group_size = len(go2geneIDs[GOlabel])
+
+            for i, (train_idx, test_idx) in enumerate(skf.split(X, y_GO)):
+                model = LogisticRegression(penalty='none', n_jobs=n_jobs)
+                X_train = X.iloc[train_idx, :]
+                y_train = y_GO.iloc[train_idx]
+                X_test = X.iloc[test_idx, :]
+                y_test = y_GO.iloc[test_idx]
+
+                model.fit(X_train, y_train)
+
+                # Extract predictions from fitted model
+                preds = list(model.predict(X_test))
+                # probs for classes ordered in same manner as model.classes_
+                # model.classes_  >>  array([False,  True])
+                probas = pd.DataFrame(model.predict_proba(
+                    X_test), columns=model.classes_)
+
+                # Get metrics for each model
+                #f1 = f1_score(y_test, preds)
+                #auc = roc_auc_score(y_test, probas[True])
+
+
+                y_test_total = y_test_total.append(y_test)
+                preds_total += preds
+                probas_total = probas_total.append(probas)
+
+    
+                print("Fold")
+
+            preds_total = np.array(preds_total)
+
+
+            f1 = f1_score(y_test_total, preds_total)
+            auc = roc_auc_score(y_test_total, probas_total[True])
+
             measures = {'GO_group': GOlabel,
-                        'iteration': i,
+                        'GO_group_title': GO_term,
+                        'GO_group_size': GO_group_size,
+                        'number of used genes':gene_count_per_GO_group[GOlabel],
                         'f1': f1,
                         'AUC': auc}
-            #print(f"Fold:{i} F1:{f1} AUC:{auc}")
-            print ("Fold")
+
+
+
             GO_SCORES.append(measures)
+
+            count +=1
 
     return pd.DataFrame(GO_SCORES)
 
 
-
 if __name__ == "__main__":
 
-    embed_file_name =  "validation_embeddings_image_level.csv"
-    path_to_embed = os.path.join("/Users/pegah_abed/Documents/Embedding_Evaluation/embed_eval", embed_file_name)
-    emb_df = pd.read_csv(path_to_embed)
-    print ("number of images: ", len(emb_df))
+
+    """
+
+    val_embed_file_name =  "1596374295_validation_embeddings_gene_level_with_info.csv"
+    train_embed_file_name = "1596374295_training_embeddings_gene_level_with_info.csv"
+
+    general_embed_path = "/Users/pegah_abed/Documents/Embedding_Evaluation/embed_eval/top_1596374295/"
+    general_data_path = "/Users/pegah_abed/Documents/Embedding_Evaluation/embed_eval/"
+
+    path_to_val_embed = os.path.join(general_embed_path,val_embed_file_name)
+    path_to_train_embed = os.path.join(general_embed_path, train_embed_file_name)
+
+
+    val_emb_df = pd.read_csv(path_to_val_embed)
+    train_emb_df = pd.read_csv(path_to_train_embed)
+
 
     #dist_matrix = distance_df(emb_df)
     #print ("number of rows: ", len(dist_matrix))
     #dist_matrix.to_csv(os.path.join("/Users/pegah_abed/Documents/Embedding_Evaluation/embed_eval", "distance_matrix_3.csv"))
 
-    get_proportion_first_match(emb_df)
+    #get_proportion_first_match(emb_df)
+
+    val_after_filter_df =filter_embedding_for_genes_in_GO(val_emb_df)
+    val_after_filter_df.to_csv(os.path.join(general_data_path, "val_embed_genes_in_go.csv"), index=None)
+
+    train_after_filter_df = filter_embedding_for_genes_in_GO(train_emb_df, index_type='gene_symbol')
+    train_after_filter_df.to_csv(os.path.join(general_data_path, "train_embed_genes_in_go.csv"), index=None)
+
+
+
+    val_emb_entrez_id = val_after_filter_df['entrez_id']
+    min_GO_size = 5
+    max_GO_size = 20
+    result_val = get_GO_presence_labels(val_emb_entrez_id, min_GO_size=min_GO_size, max_GO_size=max_GO_size)
+    print ("Number of val GO groups: ", len(list(result_val)))
+    result_val.to_csv(os.path.join(general_data_path, "val_embed_go_presence_labels_" + str(min_GO_size) + "_" + str(max_GO_size)+ ".csv"))
+
+    train_emb_entrez_id = train_after_filter_df['entrez_id']
+    min_GO_size = 40
+    max_GO_size = 200
+    result_train = get_GO_presence_labels(train_emb_entrez_id, min_GO_size=min_GO_size, max_GO_size=max_GO_size)
+    print ("Number of train GO groups: ",len(list(result_train)))
+    result_train.to_csv(os.path.join(general_data_path, "train_embed_go_presence_labels_"+ str(min_GO_size) + "_" + str(max_GO_size)+ ".csv"))
+    
+    """
+
+
+    general_path = "/Users/pegah_abed/Documents/old_Human_ISH/after_segmentation/dummy_3"
+
+    #ts_list = ["1602225390", "1602226166" ,"1602861872"]
+    ts_list = ["1603427490"]
+    for ts in ts_list:
+
+        #embed_file_name = ts + "_triplet_no_sz_training_validation_embeddings_gene_level_with_info.csv"
+        embed_file_name = ts + "_triplet_no_sz_all_training_embeddings_gene_level_with_info.csv"
+        path_to_embed = os.path.join(general_path, ts, embed_file_name)
+        embed_df = pd.read_csv(path_to_embed)
+
+        """
+        embed_df_after_filter = filter_embedding_for_genes_in_GO(embed_df)
+        embed_df_after_filter.to_csv(os.path.join(general_path, ts, "embed_genes_in_go.csv"), index=None)
+    
+        emb_entrez_id = embed_df_after_filter['entrez_id']
+    
+        min_GO_size = 40
+        max_GO_size = 200
+        go_presence_df = get_GO_presence_labels(emb_entrez_id, min_GO_size=min_GO_size, max_GO_size=max_GO_size)
+        print("Number of val GO groups: ", len(list(go_presence_df)))
+        go_presence_df.to_csv(os.path.join(general_path, ts, "go_presence_labels_" + str(min_GO_size) + "_" + str(
+            max_GO_size) + ".csv"))
+    
+        emb_with_go_df = merge_embedding_with_GO_labels(embed_df_after_filter, go_presence_df)
+        emb_with_go_df.to_csv(os.path.join(general_path, ts, "embed_with_go_presence_" + str(min_GO_size) + "_" +
+                                           str(max_GO_size) + ".csv"))
+    
+        """
+
+
+        min_GO_size = 40
+        max_GO_size = 200
+        go_scores = perform_GOclass_eval(embed_df,
+                             index_type='gene_symbol',
+                             min_GO_size=min_GO_size,
+                             max_GO_size=max_GO_size,
+                             n_splits=5,
+                             n_jobs=-1)
+
+
+        go_scores = go_scores.sort_values(by=['AUC'], ascending=False)
+        go_scores = go_scores.reset_index(drop=True)
+        print (len(go_scores))
+        print (np.mean(go_scores['AUC']))
+        print ("*"*50)
+        #go_scores.to_csv(os.path.join(general_path, ts, ts +"_new_go_scores_" + str(min_GO_size) + "_" + str(max_GO_size) + ".csv"))
+        
+
+        
+
+
+
+
+
+
+
+
+
 
