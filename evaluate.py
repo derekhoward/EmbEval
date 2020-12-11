@@ -285,10 +285,12 @@ def perform_GOclass_eval(embedding_df,
 
     for GOlabel in y:
 
-        y_test_total = pd.Series([])
-        preds_total = []
-        probas_total = pd.DataFrame()
+        #y_test_total = pd.Series([])
+        #preds_total = []
+        #probas_total = pd.DataFrame()
 
+        f1_score_values = []
+        auc_values = []
 
         print('--'*50)
         print(GOlabel)
@@ -314,21 +316,26 @@ def perform_GOclass_eval(embedding_df,
                 X_test), columns=model.classes_)
 
             # Get metrics for each model
-            #f1 = f1_score(y_test, preds)
-            #auc = roc_auc_score(y_test, probas[True])
+            f1 = f1_score(y_test, preds)
+            auc = roc_auc_score(y_test, probas[True])
 
+            f1_score_values.append(f1)
+            auc_values.append(auc)
 
-            y_test_total = y_test_total.append(y_test)
-            preds_total += preds
-            probas_total = probas_total.append(probas)
+            #y_test_total = y_test_total.append(y_test)
+            #preds_total += preds
+            #probas_total = probas_total.append(probas)
 
 
             print("Fold")
 
-        preds_total = np.array(preds_total)
+        #preds_total = np.array(preds_total)
 
-        f1 = f1_score(y_test_total, preds_total)
-        auc = roc_auc_score(y_test_total, probas_total[True])
+        #f1 = f1_score(y_test_total, preds_total)
+        #auc = roc_auc_score(y_test_total, probas_total[True])
+
+        f1 = np.mean(f1_score_values)
+        auc = np.mean(auc_values)
 
         measures = {'GO_group': GOlabel,
                     'GO_group_title': GO_term,
